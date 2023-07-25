@@ -39,10 +39,10 @@ controls - 10Hz - 10kHz frequency range.
 7. [White] White and Pink noise outputs.
 
 ### Building Firmware
-The Cheep3a firmware is based on cnlohr's "ch32v003fun" project and expects that
-the github directory for that project is located in an adjacent directory in
-order for the make-based build system to operate correctly. The following
-steps should work:
+The Cheep3a firmware is based on [cnlohr's "ch32v003fun"](https://github.com/cnlohr/ch32v003fun)
+project and expects that the github directory for that project is located in
+an adjacent directory in order for the make-based build system to operate
+correctly. The following steps should work:
 
 ```
 git clone git@github.com:emeb/cheep3a.git

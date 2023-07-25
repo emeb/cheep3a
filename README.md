@@ -42,7 +42,8 @@ controls - 10Hz - 10kHz frequency range.
 The Cheep3a firmware is based on [cnlohr's "ch32v003fun"](https://github.com/cnlohr/ch32v003fun)
 project and expects that the github directory for that project is located in
 an adjacent directory in order for the make-based build system to operate
-correctly. The following steps should work:
+correctly. A recent RISC-V GCC toolchain is also required and once you have
+that installed (and in your search path) the following steps should work:
 
 ```
 git clone git@github.com:emeb/cheep3a.git

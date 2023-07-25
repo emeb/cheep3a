@@ -1,7 +1,7 @@
 # cheep3a
 An inexpensive Eurorack audio generator
 
-<img src="doc/cheep32.jpg" width="640" />
+<img src="doc/cheep3a.jpg" width="640" />
 
 ## Abstract
 This project is an extension of previous "Cheep" Eurorack modules which have been

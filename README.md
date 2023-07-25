@@ -38,6 +38,9 @@ controls - 10Hz - 10kHz frequency range.
 6. [Cyan] Two independent clocked noise outputs.
 7. [White] White and Pink noise outputs.
 
+Mode selection is stored in the MCU's on-chip flash memory and will persist
+across power cycles.
+
 ### Building Firmware
 The Cheep3a firmware is based on [cnlohr's "ch32v003fun"](https://github.com/cnlohr/ch32v003fun)
 project and expects that the github directory for that project is located in

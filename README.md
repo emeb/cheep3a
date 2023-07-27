@@ -32,9 +32,9 @@ frequency range.
 2. [Green] Same as 1 but with 0.3Hz - 300Hz frequency range.
 3. [Yellow] One sine oscillator with two outputs, phase offset and amplitude
 control - 10Hz - 10kHz frequency range.
-4. [Blue] Same as 3 but with 0.3Hz - 300Hz frequency range.
-5. [Magenta] One - pulse wave oscillator with two outputs and independent PWM
+4. [Blue] Pulse wave oscillator with two outputs and independent PWM
 controls - 10Hz - 10kHz frequency range.
+5. [Magenta] 2-operator FM with index and ratio controls. Mod and Carrier outputs.
 6. [Cyan] Two independent clocked noise outputs.
 7. [White] White and Pink noise outputs.
 

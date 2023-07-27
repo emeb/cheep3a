@@ -40,8 +40,54 @@ void dac_update(uint16_t *buffer);
 
 /* audio state */
 uint8_t mode, psync;
-uint32_t osc_phs[2], osc_frq[2];
+int32_t osc_phs[2], osc_frq[2];
 int16_t clk_nz[2];
+int64_t fm_phs;
+uint16_t fm_index, fm_ratio, live_fm_ratio;
+
+/*
+ * hysteresis & reduction
+ */
+void ratio_hyst(uint16_t *old, uint16_t in, uint8_t shift)
+{
+	int16_t diff, guard = (1<<(shift-2));
+	
+	/* Special case - don't guardband at endpoints */
+	if((in == 0) || (in == 0x3FF))
+	{
+		*old = in >> shift;
+		return;
+	}
+	
+	/* find abs val of diff */
+	diff = (int16_t)(*old << shift) - (int16_t)in;
+	if(diff<0)
+		diff = -diff;
+	
+	/* exceeds guardband ? */
+	if(diff > guard)
+	{
+		/* yes so update prev */
+		*old  = in >> shift;
+	}
+}
+
+/*
+ * 32-bit phase to 16-bit sine with quarter-cycle LUT
+ */
+#define SINE_LUT_MASK ((1<<SINE_LUT_BITS)-1)
+int16_t SineWave(uint32_t Phs)
+{
+	int16_t result;
+	int16_t sgn = (Phs & 0x80000000) ? 1 : 0;
+	uint32_t dir = (Phs & 0x40000000) ? SINE_LUT_MASK : 0;
+	
+	Phs = ((Phs>>(30-SINE_LUT_BITS)) & SINE_LUT_MASK) ^ dir;
+	result = Sine16bit[Phs];
+	
+	/* sign inversion w/o multiply */
+	return sgn ? ~result + 1 : result ;
+}
 
 /*
  * DAC buffer updates - called at IRQ time
@@ -50,7 +96,7 @@ void dac_update(uint16_t *buffer)
 {
 	uint8_t i;
 	int16_t phs, amp, pw1, pw2;
-	uint32_t tphs;
+	int32_t tphs, tmp_phs;
 	
 	// Get sync input
 	if(sync_re())
@@ -70,38 +116,41 @@ void dac_update(uint16_t *buffer)
 			for(i=0;i<DACBUFSZ/2;i+=2)
 			{
 				// right chl
-				*buffer++ = (amp * Sine16bit[osc_phs[0]>>24])>>9;
+				*buffer++ = (amp * SineWave(osc_phs[0]))>>9;
 				osc_phs[0] += osc_frq[0];
 				
 				// left chl
-				*buffer++ = (amp * Sine16bit[osc_phs[1]>>24])>>9;
+				*buffer++ = (amp * SineWave(osc_phs[1]))>>9;
 				osc_phs[1] += osc_frq[1];
 			}
 			break;
 		
 		/* sine oscillator with two outputs, phase / amp control */
 		case 3:	// Normal range
-		case 4:	// LFO range
-			osc_frq[0] = expo_calc(1023-adc_buffer[0], mode & 1 ? 0 : 5);
+			osc_frq[0] = expo_calc(1023-adc_buffer[0], 0);
 			phs = (1023 - adc_buffer[1])>>2;
 			amp = 511 - adc_buffer[2];
 			for(i=0;i<DACBUFSZ/2;i+=2)
 			{
 				// right chl
-				*buffer++ = (amp * Sine16bit[osc_phs[0]>>24])>>9;
+				*buffer++ = (amp * SineWave(osc_phs[0]))>>9;
 				
 				// left chl
-				*buffer++ = (amp * Sine16bit[((osc_phs[0]>>24) + phs) & 255])>>9;
+				*buffer++ = (amp * SineWave(osc_phs[0] + (phs<<22)))>>9;
 				
 				osc_phs[0] += osc_frq[0];
 			}
 			break;
 		
 		/* square oscillator with two outputs, PWM control */
-		case 5:
+		case 4:
 			osc_frq[0] = expo_calc(1023-adc_buffer[0], 0);
-			pw1 = (1023 - adc_buffer[1]);
-			pw2 = (1023 - adc_buffer[2]);
+			pw1 = (511 - adc_buffer[1]);
+			pw1 = pw1 > 480 ? 480 : pw1;
+			pw1 = pw1 < -480 ? -480 : pw1;
+			pw2 = (511 - adc_buffer[2]);
+			pw2 = pw2 > 480 ? 480 : pw2;
+			pw2 = pw2 < -480 ? -480 : pw2;
 			for(i=0;i<DACBUFSZ/2;i+=2)
 			{
 				// right chl
@@ -111,6 +160,31 @@ void dac_update(uint16_t *buffer)
 				*buffer++ = (osc_phs[0]>>22) > pw2 ? -32767 : 32767;
 				
 				osc_phs[0] += osc_frq[0];
+			}
+			break;
+
+		/* 2-op FM */
+		case 5:
+			osc_frq[0] = expo_calc(1023-adc_buffer[0], 0);
+			fm_index = (1023 - adc_buffer[1])<<2;
+			ratio_hyst(&fm_ratio, (1023 - adc_buffer[2]), 4);
+			for(i=0;i<DACBUFSZ/2;i+=2)
+			{
+				/* compute FM */
+				tmp_phs = fm_phs >> 3;
+				if((tmp_phs & 0xFF000000)==0)
+					live_fm_ratio = fm_ratio;	// to avoid ratio change glitches
+				tmp_phs = (tmp_phs * live_fm_ratio);
+				int16_t mod = SineWave(tmp_phs);
+				tmp_phs = (mod * fm_index)<<4;
+				tmp_phs = tmp_phs + fm_phs;
+				
+				/* send to DAC */
+				*buffer++ = mod;
+				*buffer++ = SineWave(tmp_phs);
+				
+				/* update phase */
+				fm_phs += osc_frq[0];
 			}
 			break;
 		
@@ -178,6 +252,7 @@ int main()
 	
 	// init audio state
 	mode = 0;
+	fm_phs = 0;
 	osc_phs[0] = 0;
 	osc_phs[1] = 0;
 	osc_frq[0] = 0x01000000;
